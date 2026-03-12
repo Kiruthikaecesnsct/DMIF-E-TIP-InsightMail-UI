@@ -1,0 +1,127 @@
+﻿@page "/emails"
+@using InsightMailUI.Models
+@inject HttpClient Http
+
+<h3>Email Dashboard</h3>
+<MudButtonGroup Color="Color.Primary"
+                Variant="Variant.Outlined"
+                Class="mb-4">
+
+    <MudButton OnClick="@(() => FilterByCategory(null))">
+        All
+    </MudButton>
+
+    <MudButton OnClick="@(() => FilterByCategory("Urgent"))">
+        Urgent
+    </MudButton>
+
+    <MudButton OnClick="@(() => FilterByCategory("Action Required"))">
+        Action Required
+    </MudButton>
+
+    <MudButton OnClick="@(() => FilterByCategory("FYI"))">
+        FYI
+    </MudButton>
+
+    <MudButton OnClick="@(() => FilterByCategory("Newsletter"))">
+        Newsletter
+    </MudButton>
+
+</MudButtonGroup>
+<table class="table table-striped">
+
+    <thead>
+        <tr>
+            <th>Sender</th>
+            <th>Subject</th>
+            <th>Category</th>
+            <th>Priority</th>
+            <th>Confidence</th>
+        </tr>
+    </thead>
+
+    <tbody>
+
+        @if (emails == null)
+        {
+            <tr><td colspan="5">Loading...</td></tr>
+        }
+        else
+        {
+            @foreach (var email in FilteredEmails)
+            {
+                <tr>
+
+                    <td>@email.Sender</td>
+                    <td>
+                        <a href="/emails/@email.Id">
+                            @email.Subject
+                        </a>
+                    </td>
+
+                    <td>
+                        @if (!string.IsNullOrEmpty(email.Category))
+                        {
+                            <span class="badge bg-primary">@email.Category</span>
+                        }
+                    </td>
+
+                    <td>
+                        @if (email.Priority != null)
+                        {
+                            <span class="badge bg-danger">@email.Priority</span>
+                        }
+                    </td>
+
+                    <td>
+                        @if (email.ClassificationConfidence != null)
+                        {
+                            @($"{email.ClassificationConfidence * 100:F1}%")
+                        }
+                    </td>
+
+                </tr>
+            }
+        }
+
+    </tbody>
+
+</table>
+
+@code {
+
+    List<Email>? emails;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEmails();
+
+        // auto refresh every 3 seconds
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                await Task.Delay(3000);
+                await LoadEmails();
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+    }
+
+    private async Task LoadEmails()
+    {
+        emails = await Http.GetFromJsonAsync<List<Email>>("api/v1/emails");
+    }
+    private string? selectedCategory;
+
+    private void FilterByCategory(string? category)
+    {
+        selectedCategory = category;
+    }
+
+    private IEnumerable<Email> FilteredEmails =>
+        selectedCategory == null
+            ? emails
+            : emails.Where(e => e.Category == selectedCategory);
+
+}

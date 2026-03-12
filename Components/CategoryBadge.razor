@@ -1,0 +1,21 @@
+﻿<MudChip T="String" Color="@GetCategoryColor(Category)" Size="Size.Small">
+@Category
+</MudChip>
+
+@code {
+
+[Parameter] public string? Category { get; set; }
+
+private Color GetCategoryColor(string? category)
+{
+return category switch
+{
+"Urgent" => Color.Error,
+"Action Required" => Color.Warning,
+"FYI" => Color.Info,
+"Newsletter" => Color.Default,
+_ => Color.Default
+};
+}
+
+}

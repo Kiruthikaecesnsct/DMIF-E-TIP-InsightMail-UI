@@ -1,0 +1,63 @@
+﻿@page "/stats"
+@inject HttpClient Http
+
+<h3>Email Statistics</h3>
+
+@if (stats == null)
+{
+    <p>Loading statistics...</p>
+}
+else
+{
+    <div class="row">
+
+        <div class="col-md-3">
+            <div class="card p-3">
+                <h5>Total Emails</h5>
+                <h2>@stats.TotalEmails</h2>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card p-3">
+                <h5>Unique Senders</h5>
+                <h2>@stats.UniqueSenders</h2>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card p-3">
+                <h5>Oldest Email</h5>
+                <p>@stats.OldestEmail</p>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card p-3">
+                <h5>Newest Email</h5>
+                <p>@stats.NewestEmail</p>
+            </div>
+        </div>
+
+    </div>
+}
+
+@code {
+
+    EmailStats? stats;
+
+    protected override async Task OnInitializedAsync()
+    {
+        stats = await Http.GetFromJsonAsync<EmailStats>(
+            "api/v1/emails/stats");
+    }
+
+    public class EmailStats
+    {
+        public int TotalEmails { get; set; }
+        public int UniqueSenders { get; set; }
+        public DateTime? OldestEmail { get; set; }
+        public DateTime? NewestEmail { get; set; }
+    }
+
+}

@@ -1,0 +1,60 @@
+﻿@page "/upload"
+@inject HttpClient Http
+
+<MudContainer MaxWidth="MaxWidth.Small">
+
+<MudCard>
+
+<MudCardContent>
+
+<MudText Typo="Typo.h5" Class="mb-4">
+Upload Email
+</MudText>
+
+<InputFile OnChange="UploadFile" />
+
+<MudButton Variant="Variant.Filled"
+Color="Color.Primary"
+Class="mt-3"
+OnClick="SubmitUpload">
+
+Upload </MudButton>
+
+@if (!string.IsNullOrEmpty(message))
+{ <MudAlert Severity="Severity.Success" Class="mt-3">
+@message </MudAlert>
+}
+
+</MudCardContent>
+
+</MudCard>
+
+</MudContainer>
+
+@code {
+
+private IBrowserFile? file;
+private string message = "";
+
+void UploadFile(InputFileChangeEventArgs e)
+{
+file = e.File;
+}
+
+async Task SubmitUpload()
+{
+if (file == null) return;
+
+var content = new MultipartFormDataContent();
+
+var stream = file.OpenReadStream(5000000);
+
+content.Add(new StreamContent(stream), "file", file.Name);
+
+var response = await Http.PostAsync("api/v1/emails/upload", content);
+
+if (response.IsSuccessStatusCode)
+message = "Email uploaded successfully!";
+}
+
+}

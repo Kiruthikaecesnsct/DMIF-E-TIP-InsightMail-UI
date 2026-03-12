@@ -1,0 +1,87 @@
+﻿@page "/emails/{Id}"
+@using InsightMailUI.Models
+@inject HttpClient Http
+@using MudBlazor
+
+<MudContainer MaxWidth="MaxWidth.Large">
+
+@if (email == null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudCard>
+
+        <MudCardHeader>
+            <MudText Typo="Typo.h5">@email.Subject</MudText>
+
+            <MudChip T="String" Color="@GetCategoryColor(email.Category)"
+                     Size="Size.Small"
+                     Class="ml-2">
+                @email.Category
+            </MudChip>
+        </MudCardHeader>
+
+        <MudCardContent>
+
+            <MudText><b>From:</b> @email.Sender</MudText>
+            <MudText><b>Date:</b> @email.ReceivedDate</MudText>
+            <MudText><b>Priority:</b> @email.Priority/10</MudText>
+
+            <MudDivider Class="my-4" />
+
+            <MudText Typo="Typo.body1">
+                @email.Body
+            </MudText>
+
+            @if (!string.IsNullOrEmpty(email.ClassificationReasoning))
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-4">
+
+                    <MudText Typo="Typo.subtitle2">
+                        AI Classification Reasoning
+                    </MudText>
+
+                    <MudText Typo="Typo.body2">
+                        @email.ClassificationReasoning
+                    </MudText>
+
+                    <MudText Typo="Typo.caption">
+                        Confidence:
+                        @email.ClassificationConfidence?.ToString("P0")
+                    </MudText>
+
+                </MudAlert>
+            }
+
+        </MudCardContent>
+
+    </MudCard>
+}
+
+</MudContainer>
+
+@code {
+
+    [Parameter] public string Id { get; set; } = "";
+
+    private Email? email;
+
+    protected override async Task OnInitializedAsync()
+    {
+        email = await Http.GetFromJsonAsync<Email>($"api/v1/emails/{Id}");
+    }
+
+    private Color GetCategoryColor(string? category)
+    {
+        return category switch
+        {
+            "Urgent" => Color.Error,
+            "Action Required" => Color.Warning,
+            "FYI" => Color.Info,
+            "Newsletter" => Color.Success,
+            _ => Color.Default
+        };
+    }
+}

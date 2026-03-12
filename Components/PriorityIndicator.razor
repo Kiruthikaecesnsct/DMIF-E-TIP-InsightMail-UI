@@ -1,0 +1,8 @@
+﻿<MudRating ReadOnly="true"  
+           SelectedValue="@(Priority ?? 5)"  
+           MaxValue="10" 
+           Size="Size.Small" /> 
+ 
+@code { 
+    [Parameter] public int? Priority { get; set; } 
+} 
