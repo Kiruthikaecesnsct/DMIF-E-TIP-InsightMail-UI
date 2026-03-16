@@ -1,0 +1,158 @@
+﻿@using InsightMailUI.Models
+@using MudBlazor
+@inject HttpClient Http
+
+@if (Item != null)
+{
+    <MudCard Class="mb-2">
+
+        <MudCardContent>
+
+            <div class="d-flex justify-space-between align-center">
+
+                <div class="flex-grow-1">
+
+                    <MudText Typo="Typo.body1">
+
+                        <MudIcon Icon="@GetStatusIcon()"
+                                 Color="@GetStatusColor()"
+                                 Size="Size.Small" />
+
+                        @Item.Description
+
+                    </MudText>
+
+                    <div class="mt-2">
+
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@GetPriorityColor()">
+                            @Item.Priority
+                        </MudChip>
+
+                        @if (Item.DueDate.HasValue)
+                        {
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Icon="@Icons.Material.Filled.CalendarToday">
+
+                                Due: @Item.DueDate.Value.ToString("MMM dd")
+
+                            </MudChip>
+                        }
+
+                        <MudChip T="string"
+                                 Size="Size.Small"
+                                 Variant="Variant.Outlined">
+
+                            Confidence: @(Item.ConfidenceScore * 100)%
+
+                        </MudChip>
+
+                    </div>
+
+                </div>
+
+                <div class="ml-4">
+
+                    @if (Item.Status == ActionItemStatus.Extracted)
+                    {
+                        <MudButton Size="Size.Small"
+                                   Color="Color.Success"
+                                   OnClick="ConfirmTask">
+                            Confirm
+                        </MudButton>
+
+                        <MudButton Size="Size.Small"
+                                   Color="Color.Error"
+                                   OnClick="DismissTask">
+                            Dismiss
+                        </MudButton>
+                    }
+                    else if (Item.Status == ActionItemStatus.Confirmed)
+                    {
+                        <MudButton Size="Size.Small"
+                                   Color="Color.Primary"
+                                   OnClick="CompleteTask">
+                            Complete
+                        </MudButton>
+                    }
+
+                </div>
+
+            </div>
+
+        </MudCardContent>
+
+    </MudCard>
+}
+
+@code {
+
+    [Parameter] public ActionItem? Item { get; set; }
+
+    [Parameter] public EventCallback OnStatusChanged { get; set; }
+
+    private Color GetPriorityColor()
+    {
+        if (Item == null) return Color.Default;
+
+        return Item.Priority switch
+        {
+            Priority.High => Color.Error,
+            Priority.Medium => Color.Warning,
+            Priority.Low => Color.Info,
+            _ => Color.Default
+        };
+    }
+
+    private Color GetStatusColor()
+    {
+        if (Item == null) return Color.Default;
+
+        return Item.Status switch
+        {
+            ActionItemStatus.Extracted => Color.Info,
+            ActionItemStatus.Confirmed => Color.Primary,
+            ActionItemStatus.Completed => Color.Success,
+            _ => Color.Default
+        };
+    }
+
+    private string GetStatusIcon()
+    {
+        if (Item == null) return Icons.Material.Filled.Circle;
+
+        return Item.Status switch
+        {
+            ActionItemStatus.Extracted => Icons.Material.Filled.HelpOutline,
+            ActionItemStatus.Confirmed => Icons.Material.Filled.CheckCircleOutline,
+            ActionItemStatus.Completed => Icons.Material.Filled.CheckCircle,
+            _ => Icons.Material.Filled.Circle
+        };
+    }
+
+    private async Task ConfirmTask()
+    {
+        if (Item == null) return;
+
+        await Http.PutAsync($"api/v1/actionitems/{Item.Id}/confirm", null);
+        await OnStatusChanged.InvokeAsync();
+    }
+
+    private async Task CompleteTask()
+    {
+        if (Item == null) return;
+
+        await Http.PutAsync($"api/v1/actionitems/{Item.Id}/complete", null);
+        await OnStatusChanged.InvokeAsync();
+    }
+
+    private async Task DismissTask()
+    {
+        if (Item == null) return;
+
+        await Http.DeleteAsync($"api/v1/actionitems/{Item.Id}");
+        await OnStatusChanged.InvokeAsync();
+    }
+
+}

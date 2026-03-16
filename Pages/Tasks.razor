@@ -1,0 +1,138 @@
+﻿@page "/tasks"
+@using InsightMailUI.Models
+@using MudBlazor
+@inject HttpClient Http
+
+<MudContainer MaxWidth="MaxWidth.Large">
+
+<MudText Typo="Typo.h4" Class="mb-4">
+    My Tasks
+</MudText>
+
+<MudTabs>
+
+    <!-- Pending Review -->
+    <MudTabPanel Text="Pending Review">
+
+        @if (extractedTasks == null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else if (!extractedTasks.Any())
+        {
+            <MudText>No tasks pending review</MudText>
+        }
+        else
+        {
+            foreach (var task in extractedTasks)
+            {
+                <ActionItemCard Item="@task"
+                                OnStatusChanged="LoadTasks" />
+            }
+        }
+
+        <MudText Class="mt-2">
+            Task Count: @(extractedTasks?.Count ?? 0)
+        </MudText>
+
+    </MudTabPanel>
+
+
+    <!-- To Do -->
+    <MudTabPanel Text="To Do">
+
+        @if (confirmedTasks == null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else if (!confirmedTasks.Any())
+        {
+            <MudText>No tasks to do</MudText>
+        }
+        else
+        {
+            foreach (var task in confirmedTasks)
+            {
+                <ActionItemCard Item="@task"
+                                OnStatusChanged="LoadTasks" />
+            }
+        }
+
+    </MudTabPanel>
+
+
+    <!-- Completed -->
+    <MudTabPanel Text="Completed">
+
+        @if (completedTasks == null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else if (!completedTasks.Any())
+        {
+            <MudText>No completed tasks</MudText>
+        }
+        else
+        {
+            foreach (var task in completedTasks)
+            {
+                <ActionItemCard Item="@task"
+                                OnStatusChanged="LoadTasks" />
+            }
+        }
+
+    </MudTabPanel>
+
+</MudTabs>
+
+</MudContainer>
+
+
+@code {
+
+    private List<ActionItem>? extractedTasks;
+    private List<ActionItem>? confirmedTasks;
+    private List<ActionItem>? completedTasks;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTasks();
+    }
+
+    private async Task LoadTasks()
+    {
+        try
+        {
+            var allTasks =
+                await Http.GetFromJsonAsync<List<ActionItem>>("api/v1/actionitems");
+
+            if (allTasks == null)
+            {
+                extractedTasks = new();
+                confirmedTasks = new();
+                completedTasks = new();
+                return;
+            }
+
+            extractedTasks =
+                allTasks.Where(t => t.Status == ActionItemStatus.Extracted).ToList();
+
+            confirmedTasks =
+                allTasks.Where(t => t.Status == ActionItemStatus.Confirmed).ToList();
+
+            completedTasks =
+                allTasks.Where(t => t.Status == ActionItemStatus.Completed).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading tasks: {ex.Message}");
+
+            extractedTasks = new();
+            confirmedTasks = new();
+            completedTasks = new();
+        }
+
+        StateHasChanged();
+    }
+
+}
