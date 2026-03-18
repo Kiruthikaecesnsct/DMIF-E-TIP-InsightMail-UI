@@ -1,0 +1,145 @@
+﻿@page "/search"
+@using InsightMailUI.Models
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<MudContainer MaxWidth="MaxWidth.Large">
+
+    <!-- TITLE -->
+    <MudText Typo="Typo.h4" Class="mb-4">
+        Semantic Email Search
+    </MudText>
+
+    <!-- SEARCH INPUT -->
+    <MudTextField @bind-Value="query"
+                  Label="Search emails"
+                  Placeholder="Find emails about deadlines, meetings, budgets..."
+                  Variant="Variant.Outlined"
+                  FullWidth="true"
+                  Immediate="true" />
+
+    <!-- SEARCH BUTTON -->
+    <MudButton Color="Color.Primary"
+               OnClick="SearchEmails"
+               Disabled="isLoading"
+               Class="mt-2">
+
+        @if (isLoading)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            <span>Searching...</span>
+        }
+        else
+        {
+            <span>Search</span>
+        }
+    </MudButton>
+
+    <!-- RESULTS -->
+    @if (results != null)
+    {
+        <MudDivider Class="my-4" />
+
+        <MudText Typo="Typo.h6">
+            Results (@results.Count)
+        </MudText>
+
+        @if (!results.Any())
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-2">
+                No matching emails found.
+            </MudAlert>
+        }
+        else
+        {
+            <MudStack Spacing="2" Class="mt-2">
+
+                @foreach (var result in results)
+                {
+                    var email = result.Email;
+                    var score = result.Score;
+
+                    <MudCard Class="pa-3" Style="cursor:pointer;"
+                             @onclick="() => ViewEmail(email.Id)">
+
+                        <MudText Typo="Typo.subtitle1">
+                            @email.Subject
+                        </MudText>
+
+                        <MudText Typo="Typo.caption">
+                            From: @email.Sender |
+                            @email.ReceivedDate.ToString("yyyy-MM-dd")
+                        </MudText>
+
+                        <!-- SNIPPET -->
+                        <MudText Typo="Typo.body2" Class="mt-2">
+                            @GetSnippet(email.Body)
+                        </MudText>
+
+                        <!-- SCORE -->
+                        @if (score != null)
+                        {
+                            <MudChip T="String" Color="Color.Success"
+                                     Size="Size.Small"
+                                     Class="mt-2">
+                                Relevance: @($"{score * 100:F0}%")
+                            </MudChip>
+                        }
+
+                    </MudCard>
+                }
+
+            </MudStack>
+        }
+    }
+
+</MudContainer>
+
+@code {
+
+    private string query = string.Empty;
+    private bool isLoading = false;
+
+    private List<SearchResult>? results;
+
+    // 🔍 SEARCH METHOD
+    private async Task SearchEmails()
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return;
+
+        isLoading = true;
+        results = null;
+
+        try
+        {
+            results = await Http.GetFromJsonAsync<List<SearchResult>>(
+                $"api/v1/emails/search?query={Uri.EscapeDataString(query)}");
+        }
+        catch
+        {
+            results = new List<SearchResult>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    // 🔗 NAVIGATE TO EMAIL
+    private void ViewEmail(string emailId)
+    {
+        Nav.NavigateTo($"/emails/{emailId}");
+    }
+
+    // ✂️ SNIPPET HELPER
+    private string GetSnippet(string body)
+    {
+        if (string.IsNullOrEmpty(body))
+            return "";
+
+        return body.Length <= 150
+            ? body
+            : body.Substring(0, 150) + "...";
+    }
+}
