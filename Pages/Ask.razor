@@ -1,0 +1,122 @@
+﻿@page "/ask"
+@using InsightMailUI.Models
+@inject HttpClient Http
+
+<MudContainer MaxWidth="MaxWidth.Large">
+
+    <MudText Typo="Typo.h4" Class="mb-4">
+        Ask Questions About Your Emails
+    </MudText>
+
+    <!-- INPUT -->
+    <MudTextField @bind-Value="question"
+                  Label="Ask a question"
+                  Placeholder="What did Sarah say about the budget?"
+                  Variant="Variant.Outlined"
+                  FullWidth="true"
+                  Immediate="true" />
+
+    <!-- BUTTON -->
+    <MudButton Color="Color.Primary"
+               OnClick="AskQuestion"
+               Disabled="isLoading"
+               Class="mt-2">
+
+        @if (isLoading)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            <span>Thinking...</span>
+        }
+        else
+        {
+            <span>Ask</span>
+        }
+    </MudButton>
+
+    <!-- ANSWER -->
+    @if (answer != null)
+    {
+        <MudCard Class="mt-4">
+
+            <MudCardContent>
+
+                <MudText Typo="Typo.h6">Answer:</MudText>
+
+                <MudText Class="mt-2">
+                    @answer.Answer
+                </MudText>
+
+                <!-- SOURCES -->
+                @if (answer.SourceEmails != null && answer.SourceEmails.Any())
+                {
+                    <MudDivider Class="my-4" />
+
+                    <MudText Typo="Typo.subtitle2">
+                        Sources:
+                    </MudText>
+
+                    <MudStack Direction="Row" Spacing="2" Wrap="Wrap.Wrap">
+
+                        @for (int i = 0; i < answer.SourceEmails.Count; i++)
+                        {
+                            var email = answer.SourceEmails[i];
+                            var score = answer.RelevanceScores?.ElementAtOrDefault(i);
+
+                            <MudChip T="String" Color="Color.Info"
+                                     Variant="Variant.Filled"
+                                     Href="@($"/emails/{email.Id}")"
+                                     Class="mt-2">
+
+                                @email.Subject (from @email.Sender)
+
+                                @if (score != null)
+                                {
+                                    <span style="margin-left:8px;">
+                                        (@($"{score * 100:F0}%"))
+                                    </span>
+                                }
+
+                            </MudChip>
+                        }
+
+                    </MudStack>
+                }
+
+            </MudCardContent>
+
+        </MudCard>
+    }
+
+</MudContainer>
+
+@code {
+    private string question = string.Empty;
+    private RAGAnswer? answer;
+    private bool isLoading = false;
+
+    private async Task AskQuestion()
+    {
+        if (string.IsNullOrWhiteSpace(question))
+            return;
+
+        isLoading = true;
+        answer = null;
+
+        try
+        {
+            answer = await Http.GetFromJsonAsync<RAGAnswer>(
+                $"api/v1/emails/ask?question={Uri.EscapeDataString(question)}");
+        }
+        catch
+        {
+            answer = new RAGAnswer
+            {
+                Answer = "Something went wrong while fetching the answer."
+            };
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

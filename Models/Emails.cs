@@ -1,4 +1,6 @@
-﻿namespace InsightMailUI.Models
+﻿using MongoDB.Bson.Serialization.Attributes;
+
+namespace InsightMailUI.Models
 {
     public class Email
     {
@@ -25,5 +27,12 @@
         public DateTime? ClassifiedDate { get; set; }
         public List<string> ActionItemIds { get; set; } = new();
         public bool HasActionItems => ActionItemIds.Any();
+        public float[]? Embedding { get; set; }
+        public DateTime? EmbeddingGeneratedDate { get; set; }
+       
+        [BsonElement("score")]
+        [BsonIgnoreIfNull]
+        public float? Score { get; set; }
+
     }
 }
