@@ -2,126 +2,175 @@
 @using InsightMailUI.Models
 @using MudBlazor
 @inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
 
 <MudContainer MaxWidth="MaxWidth.Large">
+    @if (email == null)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else
+    {
+        <!-- EMAIL CARD -->
+        <MudCard Class="mb-4">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h5">@email.Subject</MudText>
+                    <MudChip T="string"
+                             Color="@GetCategoryColor(email.Category)"
+                             Size="Size.Small"
+                             Class="ml-2">
+                        @email.Category
+                    </MudChip>
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.AutoAwesome"
+                               OnClick="GenerateReplies"
+                               Disabled="isGenerating">
+                        @if (isGenerating)
+                        {
+                            <MudProgressCircular Size="Size.Small"
+                                                 Indeterminate="true"
+                                                 Class="mr-2" />
+                            <span>Generating...</span>
+                        }
+                        else
+                        {
+                            <span>Generate Reply</span>
+                        }
+                    </MudButton>
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText><b>From:</b> @email.Sender</MudText>
+                <MudText><b>Date:</b> @email.ReceivedDate</MudText>
+                <MudText><b>Priority:</b> @email.Priority/10</MudText>
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.body1">@email.Body</MudText>
 
-@if (email == null)
-{
-    <MudProgressCircular Indeterminate="true" />
-}
-else
-{
-
-    <!-- EMAIL CARD -->
-
-    <MudCard Class="mb-4">
-
-        <MudCardHeader>
-            <MudText Typo="Typo.h5">@email.Subject</MudText>
-
-            <MudChip T="String"
-                     Color="@GetCategoryColor(email.Category)"
-                     Size="Size.Small"
-                     Class="ml-2">
-                @email.Category
-            </MudChip>
-        </MudCardHeader>
-
-        <MudCardContent>
-
-            <MudText><b>From:</b> @email.Sender</MudText>
-            <MudText><b>Date:</b> @email.ReceivedDate</MudText>
-            <MudText><b>Priority:</b> @email.Priority/10</MudText>
-
-            <MudDivider Class="my-4" />
-
-            <MudText Typo="Typo.body1">
-                @email.Body
-            </MudText>
-
-            @if (!string.IsNullOrEmpty(email.ClassificationReasoning))
-            {
-                <MudAlert Severity="Severity.Info" Class="mt-4">
-
-                    <MudText Typo="Typo.subtitle2">
-                        AI Classification Reasoning
-                    </MudText>
-
-                    <MudText Typo="Typo.body2">
-                        @email.ClassificationReasoning
-                    </MudText>
-
-                    <MudText Typo="Typo.caption">
-                        Confidence:
-                        @email.ClassificationConfidence?.ToString("P0")
-                    </MudText>
-
-                </MudAlert>
-            }
-
-        </MudCardContent>
-
-    </MudCard>
-
-
-    <!-- ACTION ITEMS -->
-
-    <MudCard>
-
-        <MudCardHeader>
-
-            <MudText Typo="Typo.h6">
-
-                <MudIcon Icon="@Icons.Material.Filled.Task" />
-
-                Extracted Action Items
-
-            </MudText>
-
-        </MudCardHeader>
-
-        <MudCardContent>
-
-            @if (actionItems == null)
-            {
-                <MudProgressCircular Indeterminate="true" />
-            }
-            else if (!actionItems.Any())
-            {
-                <MudAlert Severity="Severity.Info">
-                    No action items found
-                </MudAlert>
-            }
-            else
-            {
-                @foreach (var item in actionItems)
+                @if (!string.IsNullOrEmpty(email.ClassificationReasoning))
                 {
-                    <ActionItemCard Item="@item"
-                                    OnStatusChanged="LoadActionItems" />
+                    <MudAlert Severity="Severity.Info" Class="mt-4">
+                        <MudText Typo="Typo.subtitle2">AI Classification Reasoning</MudText>
+                        <MudText Typo="Typo.body2">@email.ClassificationReasoning</MudText>
+                        <MudText Typo="Typo.caption">
+                            Confidence: @email.ClassificationConfidence?.ToString("P0")
+                        </MudText>
+                    </MudAlert>
                 }
-            }
+            </MudCardContent>
+        </MudCard>
 
-        </MudCardContent>
+        <!-- REPLY OPTIONS (shown after generation) -->
+        @if (replyResponse != null && replyResponse.Replies.Any())
+        {
+            <MudCard Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Reply" Class="mr-2" />
+                            AI-Generated Reply Options
+                        </MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            Generated at @replyResponse.GeneratedAt.ToLocalTime().ToString("hh:mm tt")
+                            · Edit inline, then copy
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        @foreach (var reply in replyResponse.Replies)
+                        {
+                            <MudItem xs="12" md="4">
+                                <MudCard Outlined="true" Class="h-100">
+                                    <MudCardHeader>
+                                        <CardHeaderContent>
+                                            <MudChip T="string"
+                                                     Color="@GetReplyTypeColor(reply.Type)"
+                                                     Size="Size.Small">
+                                                @GetReplyTypeLabel(reply.Type)
+                                            </MudChip>
+                                        </CardHeaderContent>
+                                        <CardHeaderActions>
+                                            <MudTooltip Text="Confidence score">
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    @reply.Confidence.ToString("P0")
+                                                </MudText>
+                                            </MudTooltip>
+                                        </CardHeaderActions>
+                                    </MudCardHeader>
+                                    <MudCardContent>
+                                        <MudTextField @bind-Value="reply.Body"
+                                                      Lines="8"
+                                                      Variant="Variant.Outlined"
+                                                      FullWidth="true"
+                                                      Label="Edit before sending" />
+                                    </MudCardContent>
+                                    <MudCardActions>
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Primary"
+                                                   StartIcon="@Icons.Material.Filled.ContentCopy"
+                                                   OnClick="@(() => CopyToClipboard(reply.Body))">
+                                            Copy
+                                        </MudButton>
+                                        <MudButton Variant="Variant.Text"
+                                                   Color="Color.Secondary"
+                                                   StartIcon="@Icons.Material.Filled.Refresh"
+                                                   OnClick="GenerateReplies">
+                                            Regenerate
+                                        </MudButton>
+                                    </MudCardActions>
+                                </MudCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        }
 
-    </MudCard>
-
-}
-
+        <!-- ACTION ITEMS -->
+        <MudCard>
+            <MudCardHeader>
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="@Icons.Material.Filled.Task" />
+                    Extracted Action Items
+                </MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (actionItems == null)
+                {
+                    <MudProgressCircular Indeterminate="true" />
+                }
+                else if (!actionItems.Any())
+                {
+                    <MudAlert Severity="Severity.Info">No action items found</MudAlert>
+                }
+                else
+                {
+                    @foreach (var item in actionItems)
+                    {
+                        <ActionItemCard Item="@item" OnStatusChanged="LoadActionItems" />
+                    }
+                }
+            </MudCardContent>
+        </MudCard>
+    }
 </MudContainer>
 
-
 @code {
-
     [Parameter] public string Id { get; set; } = "";
 
     private Email? email;
-
     private List<ActionItem>? actionItems;
+    private ReplyResponse? replyResponse;
+    private bool isGenerating = false;
 
     protected override async Task OnInitializedAsync()
     {
         email = await Http.GetFromJsonAsync<Email>($"api/v1/emails/{Id}");
-
         await LoadActionItems();
     }
 
@@ -130,26 +179,76 @@ else
         try
         {
             actionItems = await Http.GetFromJsonAsync<List<ActionItem>>
-            ($"api/v1/actionitems/email/{Id}");
+                ($"api/v1/actionitems/email/{Id}");
         }
         catch
         {
             actionItems = new List<ActionItem>();
         }
-
         StateHasChanged();
     }
 
-    private Color GetCategoryColor(string? category)
+    private async Task GenerateReplies()
     {
-        return category switch
+        isGenerating = true;
+        replyResponse = null;
+        StateHasChanged();
+
+        try
         {
-            "Urgent" => Color.Error,
-            "Action Required" => Color.Warning,
-            "FYI" => Color.Info,
-            "Newsletter" => Color.Success,
-            _ => Color.Default
-        };
+            var response = await Http.PostAsJsonAsync(
+                $"api/v1/emails/generate-reply/{Id}", new { });
+
+            if (response.IsSuccessStatusCode)
+            {
+                replyResponse = await response.Content
+                    .ReadFromJsonAsync<ReplyResponse>();
+                Snackbar.Add("Replies generated!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to generate replies", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isGenerating = false;
+            StateHasChanged();
+        }
     }
 
+    private async Task CopyToClipboard(string text)
+    {
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        Snackbar.Add("Copied to clipboard!", Severity.Success);
+    }
+
+    private Color GetCategoryColor(string? category) => category switch
+    {
+        "Urgent" => Color.Error,
+        "Action Required" => Color.Warning,
+        "FYI" => Color.Info,
+        "Newsletter" => Color.Success,
+        _ => Color.Default
+    };
+
+    private Color GetReplyTypeColor(string? type) => type switch
+    {
+        "brief" => Color.Info,
+        "detailed" => Color.Primary,
+        "decline" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private string GetReplyTypeLabel(string? type) => type switch
+    {
+        "brief" => "Brief Reply",
+        "detailed" => "Detailed Reply",
+        "decline" => "Polite Decline",
+        _ => type ?? "Reply"
+    };
 }
