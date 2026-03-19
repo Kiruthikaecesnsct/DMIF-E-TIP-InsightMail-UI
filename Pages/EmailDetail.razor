@@ -24,25 +24,6 @@
                         @email.Category
                     </MudChip>
                 </CardHeaderContent>
-                <CardHeaderActions>
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.AutoAwesome"
-                               OnClick="GenerateReplies"
-                               Disabled="isGenerating">
-                        @if (isGenerating)
-                        {
-                            <MudProgressCircular Size="Size.Small"
-                                                 Indeterminate="true"
-                                                 Class="mr-2" />
-                            <span>Generating...</span>
-                        }
-                        else
-                        {
-                            <span>Generate Reply</span>
-                        }
-                    </MudButton>
-                </CardHeaderActions>
             </MudCardHeader>
             <MudCardContent>
                 <MudText><b>From:</b> @email.Sender</MudText>
@@ -64,8 +45,65 @@
             </MudCardContent>
         </MudCard>
 
-        <!-- REPLY OPTIONS (shown after generation) -->
-        @if (replyResponse != null && replyResponse.Replies.Any())
+        <!-- FEATURE 1 + 2: Tone selector, length slider, generate button -->
+        <MudCard Class="mb-4">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">
+                        <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="mr-2" />
+                        Reply Generator
+                    </MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudGrid>
+                    <MudItem xs="12" md="4">
+                        <MudSelect @bind-Value="selectedTone"
+                                   Label="Tone"
+                                   Variant="Variant.Outlined"
+                                   FullWidth="true">
+                            <MudSelectItem Value="@("Professional")">Professional</MudSelectItem>
+                            <MudSelectItem Value="@("Friendly")">Friendly</MudSelectItem>
+                            <MudSelectItem Value="@("Formal")">Formal</MudSelectItem>
+                            <MudSelectItem Value="@("Casual")">Casual</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="8">
+                        <MudText Typo="Typo.body2" Class="mb-1">
+                            Max Words: <b>@maxWords</b>
+                        </MudText>
+                        <MudSlider @bind-Value="maxWords"
+                                   Min="50"
+                                   Max="500"
+                                   Step="50"
+                                   Color="Color.Primary" />
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.AutoAwesome"
+                           OnClick="GenerateReplies"
+                           Disabled="isGenerating"
+                           Class="ml-2 mb-2">
+                    @if (isGenerating)
+                    {
+                        <MudProgressCircular Size="Size.Small"
+                                             Indeterminate="true"
+                                             Class="mr-2" />
+                        <span>Generating...</span>
+                    }
+                    else
+                    {
+                        <span>Generate Reply</span>
+                    }
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+
+        <!-- REPLY OPTIONS -->
+        @if (replyResponse?.Replies?.Any() == true)
         {
             <MudCard Class="mb-4">
                 <MudCardHeader>
@@ -75,14 +113,14 @@
                             AI-Generated Reply Options
                         </MudText>
                         <MudText Typo="Typo.caption" Color="Color.Secondary">
-                            Generated at @replyResponse.GeneratedAt.ToLocalTime().ToString("hh:mm tt")
-                            · Edit inline, then copy
+                            Generated at @replyResponse?.GeneratedAt.ToLocalTime().ToString("hh:mm tt")
+                            · Tone: @selectedTone · Max @maxWords words
                         </MudText>
                     </CardHeaderContent>
                 </MudCardHeader>
                 <MudCardContent>
                     <MudGrid>
-                        @foreach (var reply in replyResponse.Replies)
+                        @foreach (var reply in replyResponse?.Replies ?? new())
                         {
                             <MudItem xs="12" md="4">
                                 <MudCard Outlined="true" Class="h-100">
@@ -95,11 +133,9 @@
                                             </MudChip>
                                         </CardHeaderContent>
                                         <CardHeaderActions>
-                                            <MudTooltip Text="Confidence score">
-                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                    @reply.Confidence.ToString("P0")
-                                                </MudText>
-                                            </MudTooltip>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                @reply.Confidence.ToString("P0")
+                                            </MudText>
                                         </CardHeaderActions>
                                     </MudCardHeader>
                                     <MudCardContent>
@@ -113,7 +149,7 @@
                                         <MudButton Variant="Variant.Filled"
                                                    Color="Color.Primary"
                                                    StartIcon="@Icons.Material.Filled.ContentCopy"
-                                                   OnClick="@(() => CopyToClipboard(reply.Body))">
+                                                   OnClick="@(() => CopyAndTrack(reply))">
                                             Copy
                                         </MudButton>
                                         <MudButton Variant="Variant.Text"
@@ -168,6 +204,15 @@
     private ReplyResponse? replyResponse;
     private bool isGenerating = false;
 
+    // Feature 1: Tone
+    private string selectedTone = "Professional";
+
+    // Feature 2: Length
+    private int maxWords = 300;
+
+    // Track original bodies for edit distance (type → original body)
+    private Dictionary<string, string> originalBodies = new();
+
     protected override async Task OnInitializedAsync()
     {
         email = await Http.GetFromJsonAsync<Email>($"api/v1/emails/{Id}");
@@ -192,17 +237,24 @@
     {
         isGenerating = true;
         replyResponse = null;
+        originalBodies.Clear();
         StateHasChanged();
 
         try
         {
             var response = await Http.PostAsJsonAsync(
-                $"api/v1/emails/generate-reply/{Id}", new { });
+                $"api/v1/emails/generate-reply/{Id}",
+                new { PreferredTone = selectedTone, MaxLength = maxWords });
 
             if (response.IsSuccessStatusCode)
             {
                 replyResponse = await response.Content
                     .ReadFromJsonAsync<ReplyResponse>();
+
+                // Store originals for edit distance tracking
+                foreach (var reply in replyResponse?.Replies ?? new())
+                    originalBodies[reply.Type] = reply.Body;
+
                 Snackbar.Add("Replies generated!", Severity.Success);
             }
             else
@@ -221,10 +273,42 @@
         }
     }
 
-    private async Task CopyToClipboard(string text)
+    private async Task CopyAndTrack(EmailReply reply)
     {
-        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        // Copy to clipboard
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", reply.Body);
         Snackbar.Add("Copied to clipboard!", Severity.Success);
+
+        // Track analytics
+        try
+        {
+            var original = originalBodies.GetValueOrDefault(reply.Type, reply.Body);
+
+            var entry = new ReplyAnalyticsEntry
+            {
+                EmailId = Id,
+                SelectedType = reply.Type,
+                OriginalBody = original,
+                FinalBody = reply.Body,
+                ToneUsed = selectedTone,
+                MaxWordsUsed = maxWords
+            };
+
+            var response = await Http.PostAsJsonAsync(
+                "api/v1/emails/reply-analytics", entry);
+
+            if (response.IsSuccessStatusCode)
+                Snackbar.Add("Analytics saved", Severity.Info);
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Analytics failed: {error}", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Analytics error: {ex.Message}", Severity.Warning);
+        }
     }
 
     private Color GetCategoryColor(string? category) => category switch

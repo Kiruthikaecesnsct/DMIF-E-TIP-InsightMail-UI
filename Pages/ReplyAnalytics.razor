@@ -1,0 +1,114 @@
+﻿@page "/reply-analytics"
+@using InsightMailUI.Models
+@using MudBlazor
+@inject HttpClient Http
+
+<MudContainer MaxWidth="MaxWidth.Medium">
+    <MudText Typo="Typo.h4" Class="mb-6">Reply Analytics</MudText>
+
+    @if (summary == null)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else
+    {
+        <!-- Stats row -->
+        <MudGrid Class="mb-6">
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h3" Color="Color.Primary">
+                        @summary.TotalGenerated
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Total Generated
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h3" Color="Color.Info">
+                        @summary.BriefSelected
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Brief Chosen
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h3" Color="Color.Primary">
+                        @summary.DetailedSelected
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Detailed Chosen
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h3" Color="Color.Warning">
+                        @summary.DeclineSelected
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Decline Chosen
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Preference bar -->
+        <MudCard Class="mb-4">
+            <MudCardHeader>
+                <MudText Typo="Typo.h6">Reply Type Preference</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                @{
+                    var total = Math.Max(summary.TotalGenerated, 1);
+                }
+                <MudText Typo="Typo.body2" Class="mb-1">
+                    Brief (@GetPct(summary.BriefSelected, total)%)
+                </MudText>
+                <MudProgressLinear Value="@GetPct(summary.BriefSelected, total)"
+                                   Color="Color.Info" Class="mb-3" />
+
+                <MudText Typo="Typo.body2" Class="mb-1">
+                    Detailed (@GetPct(summary.DetailedSelected, total)%)
+                </MudText>
+                <MudProgressLinear Value="@GetPct(summary.DetailedSelected, total)"
+                                   Color="Color.Primary" Class="mb-3" />
+
+                <MudText Typo="Typo.body2" Class="mb-1">
+                    Decline (@GetPct(summary.DeclineSelected, total)%)
+                </MudText>
+                <MudProgressLinear Value="@GetPct(summary.DeclineSelected, total)"
+                                   Color="Color.Warning" Class="mb-3" />
+            </MudCardContent>
+        </MudCard>
+
+        <!-- Other stats -->
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.body1">
+                    <b>Average edit distance:</b>
+                    @summary.AverageEditDistance.ToString("F0") characters
+                </MudText>
+                <MudText Typo="Typo.body1" Class="mt-2">
+                    <b>Most used tone:</b> @summary.MostUsedTone
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    private AnalyticsSummary? summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        summary = await Http.GetFromJsonAsync<AnalyticsSummary>
+            ("api/v1/emails/reply-analytics/summary");
+    }
+
+    private int GetPct(int count, int total) =>
+        (int)Math.Round((double)count / total * 100);
+}
