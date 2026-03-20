@@ -1,0 +1,70 @@
+﻿@page "/summary-analytics"
+@using InsightMailUI.Models
+@using MudBlazor
+@inject HttpClient Http
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-6">Summary Analytics</MudText>
+
+    @if (analytics == null)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h3" Color="Color.Primary">
+                        @analytics.TotalSummariesGenerated
+
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Summaries Generated
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h3" Color="Color.Info">
+                        @analytics.AverageThreadLength
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Avg. Emails per Thread
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h3" Color="Color.Warning">
+                        @analytics.AverageProcessingTimeSeconds s
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Avg. Processing Time
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h3" Color="Color.Success">
+                        @analytics.AverageConfidenceScore.ToString("F0")%
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Avg. Confidence Score
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private InsightMailUI.Models.SummaryAnalytics? analytics;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        analytics = await Http.GetFromJsonAsync<InsightMailUI.Models.SummaryAnalytics>
+            ("api/v1/emails/summary-analytics");
+    }
+}

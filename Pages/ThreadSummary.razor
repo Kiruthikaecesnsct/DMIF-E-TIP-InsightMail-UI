@@ -1,0 +1,323 @@
+﻿@page "/thread-summary"
+@using InsightMailUI.Models
+@using static InsightMailUI.Models.ThreadSummary
+@using MudBlazor
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Thread Summarizer</MudText>
+
+    <!-- Input card -->
+    <MudCard Class="mb-4">
+        <MudCardContent>
+            <MudText Typo="Typo.body1" Class="mb-3">
+                Enter the email subject to find and summarize the thread:
+            </MudText>
+            <MudTextField @bind-Value="subjectInput"
+                          Label="Email Subject"
+                          Variant="Variant.Outlined"
+                          FullWidth="true"
+                          Placeholder="e.g. Q4 Budget Proposal" />
+        </MudCardContent>
+        <MudCardActions>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Summarize"
+                       OnClick="SummarizeThread"
+                       Disabled="isSummarizing"
+                       Class="ml-2 mb-2">
+                @if (isSummarizing)
+                {
+                    <MudProgressCircular Size="Size.Small"
+                                         Indeterminate="true"
+                                         Class="mr-2" />
+                    <span>Summarizing...</span>
+                }
+                else
+                {
+                    <span>Summarize Thread</span>
+                }
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+
+    @if (summary != null)
+    {
+        <!-- Header chips -->
+        <MudStack Row="true" Spacing="2" Class="mb-4">
+            <MudChip T="string" Color="Color.Info" Size="Size.Small">
+                @summary.OriginalEmailCount emails
+            </MudChip>
+            <MudChip T="string" Color="Color.Success" Size="Size.Small">
+                Confidence: @summary.ConfidenceScore%
+            </MudChip>
+            <MudChip T="string" Color="Color.Default" Size="Size.Small">
+                @summary.ChunkCount chunks processed
+            </MudChip>
+            <MudChip T="string" Color="Color.Default" Size="Size.Small">
+                Generated @summary.GeneratedDate.ToLocalTime().ToString("hh:mm tt")
+            </MudChip>
+        </MudStack>
+
+        <!-- Executive Summary -->
+        <MudCard Class="mb-4">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">
+                        <MudIcon Icon="@Icons.Material.Filled.Article" Class="mr-2" />
+                        Executive Summary
+                    </MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.body1">@summary.ExecutiveSummaryText</MudText>
+            </MudCardContent>
+        </MudCard>
+
+        <!-- Collapsible sections -->
+        <MudExpansionPanels MultiExpansion="true" Class="mb-4">
+
+            <!-- Key Decisions -->
+            <MudExpansionPanel Text="@($"Key Decisions ({summary.KeyDecisions.Count})")">
+                @if (summary.KeyDecisions.Any())
+                {
+                    <MudList T="Decision">
+                        @foreach (var d in summary.KeyDecisions)
+                        {
+                            <MudListItem T="Decision">
+                                <MudStack Spacing="1">
+                                    <MudText Typo="Typo.body1">
+                                        <b>@d.DecisionText</b>
+                                    </MudText>
+                                    @if (!string.IsNullOrEmpty(d.DecidedBy))
+                                    {
+                                        <MudText Typo="Typo.body2"
+                                                 Color="Color.Secondary">
+                                            Decided by: @d.DecidedBy
+                                        </MudText>
+                                    }
+                                    @if (!string.IsNullOrEmpty(d.Date))
+                                    {
+                                        <MudText Typo="Typo.body2"
+                                                 Color="Color.Secondary">
+                                            Date: @d.Date
+                                        </MudText>
+                                    }
+                                </MudStack>
+                            </MudListItem>
+                            <MudDivider />
+                        }
+                    </MudList>
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary">No decisions identified</MudText>
+                }
+            </MudExpansionPanel>
+
+            <!-- Open Questions -->
+            <MudExpansionPanel Text="@($"Open Questions ({summary.OpenQuestions.Count})")">
+                @if (summary.OpenQuestions.Any())
+                {
+                    <MudList T="OpenQuestion">
+                        @foreach (var q in summary.OpenQuestions)
+                        {
+                            <MudListItem T="OpenQuestion">
+                                <MudStack Spacing="1">
+                                    <MudText Typo="Typo.body1">@q.Question</MudText>
+                                    @if (!string.IsNullOrEmpty(q.RaisedBy))
+                                    {
+                                        <MudText Typo="Typo.body2"
+                                                 Color="Color.Secondary">
+                                            Raised by: @q.RaisedBy
+                                        </MudText>
+                                    }
+                                    @if (!string.IsNullOrEmpty(q.Status))
+                                    {
+                                        <MudText Typo="Typo.body2"
+                                                 Color="Color.Secondary">
+                                            Status: @q.Status
+                                        </MudText>
+                                    }
+                                </MudStack>
+                            </MudListItem>
+                            <MudDivider />
+                        }
+                    </MudList>
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary">No open questions identified</MudText>
+                }
+            </MudExpansionPanel>
+
+            <!-- Action Items -->
+            <MudExpansionPanel Text="@($"Action Items ({summary.ActionItems.Count})")">
+                @if (summary.ActionItems.Any())
+                {
+                    <MudTable Items="summary.ActionItems" Dense="true">
+                        <HeaderContent>
+                            <MudTh>Task</MudTh>
+                            <MudTh>Assigned To</MudTh>
+                            <MudTh>Deadline</MudTh>
+                            <MudTh>Priority</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Task">@context.Task</MudTd>
+                            <MudTd DataLabel="Assigned">
+                                @(context.AssignedTo ?? "—")
+                            </MudTd>
+                            <MudTd DataLabel="Deadline">
+                                @(context.Deadline ?? "—")
+                            </MudTd>
+                            <MudTd DataLabel="Priority">
+                                <MudChip T="string"
+                                         Color="@GetPriorityColor(context.Priority)"
+                                         Size="Size.Small">
+                                    @context.Priority
+                                </MudChip>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary">No action items identified</MudText>
+                }
+            </MudExpansionPanel>
+
+            <!-- Timeline -->
+            <MudExpansionPanel Text="@($"Timeline ({summary.Timeline.Count} events)")">
+                @if (summary.Timeline.Any())
+                {
+                    <MudTimeline>
+                        @foreach (var evt in summary.Timeline)
+                        {
+                            <MudTimelineItem Color="Color.Primary" Size="Size.Small">
+                                <ItemContent>
+                                    <MudStack Spacing="1">
+                                        <MudText Typo="Typo.body1">
+                                            <b>@evt.Event</b>
+                                        </MudText>
+                                        <MudText Typo="Typo.body2"
+                                                 Color="Color.Secondary">
+                                            @evt.Date
+                                        </MudText>
+                                        @if (!string.IsNullOrEmpty(evt.Significance))
+                                        {
+                                            <MudText Typo="Typo.body2">
+                                                @evt.Significance
+                                            </MudText>
+                                        }
+                                    </MudStack>
+                                </ItemContent>
+                            </MudTimelineItem>
+                        }
+                    </MudTimeline>
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary">No timeline events identified</MudText>
+                }
+            </MudExpansionPanel>
+
+            <!-- Participants -->
+            <MudExpansionPanel Text="@($"Participants ({summary.Participants.Count})")">
+                @if (summary.Participants.Any())
+                {
+                    <MudTable Items="summary.Participants" Dense="true">
+                        <HeaderContent>
+                            <MudTh>Name</MudTh>
+                            <MudTh>Role</MudTh>
+                            <MudTh>Position</MudTh>
+                            <MudTh>Key Contributions</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Name">@context.Name</MudTd>
+                            <MudTd DataLabel="Role">@context.Role</MudTd>
+                            <MudTd DataLabel="Position">
+                                <MudChip T="string"
+                                         Color="@GetPositionColor(context.Position)"
+                                         Size="Size.Small">
+                                    @context.Position
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Contributions">
+                                @context.KeyContributions
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary">No participant analysis available</MudText>
+                }
+            </MudExpansionPanel>
+
+        </MudExpansionPanels>
+    }
+</MudContainer>
+
+@code {
+    private string subjectInput = "";
+    private bool isSummarizing = false;
+    private InsightMailUI.Models.ThreadSummary? summary;
+
+    private async Task SummarizeThread()
+    {
+        if (string.IsNullOrWhiteSpace(subjectInput))
+        {
+            Snackbar.Add("Please enter an email subject", Severity.Warning);
+            return;
+        }
+
+        isSummarizing = true;
+        summary = null;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync(
+                $"api/v1/emails/summarize-by-subject?subject={Uri.EscapeDataString(subjectInput)}",
+                new { });
+
+            if (response.IsSuccessStatusCode)
+            {
+                summary = await response.Content
+                 .ReadFromJsonAsync<InsightMailUI.Models.ThreadSummary>();
+                Snackbar.Add("Thread summarized!", Severity.Success);
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Error: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSummarizing = false;
+            StateHasChanged();
+        }
+    }
+
+    private Color GetPriorityColor(string? p) => p?.ToLower() switch
+    {
+        "high" => Color.Error,
+        "medium" => Color.Warning,
+        "low" => Color.Success,
+        _ => Color.Default
+    };
+
+    private Color GetPositionColor(string? p) => p?.ToLower() switch
+    {
+        "supporting" => Color.Success,
+        "opposing" => Color.Error,
+        "neutral" => Color.Info,
+        _ => Color.Default
+    };
+}
