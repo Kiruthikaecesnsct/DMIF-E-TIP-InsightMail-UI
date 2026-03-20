@@ -1,8 +1,15 @@
-﻿namespace InsightMailUI.Models
+﻿using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+
+namespace InsightMailUI.Models
 {
     public class ThreadSummary
     {
-        public string Id { get; set; } = "";
+        [BsonId]
+        [BsonRepresentation(BsonType.String)]  // ← this is the fix
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+
+        public string ThreadId { get; set; } = "";
         public string ExecutiveSummaryText { get; set; } = "";
         public List<Decision> KeyDecisions { get; set; } = new();
         public List<OpenQuestion> OpenQuestions { get; set; } = new();

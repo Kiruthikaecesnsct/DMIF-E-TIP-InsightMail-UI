@@ -1,9 +1,9 @@
 ﻿@page "/thread-summary"
 @using InsightMailUI.Models
-@using static InsightMailUI.Models.ThreadSummary
 @using MudBlazor
 @inject HttpClient Http
 @inject ISnackbar Snackbar
+@inject NavigationManager Nav
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudText Typo="Typo.h4" Class="mb-4">Thread Summarizer</MudText>
@@ -29,23 +29,45 @@
                        Class="ml-2 mb-2">
                 @if (isSummarizing)
                 {
-                    <MudProgressCircular Size="Size.Small"
-                                         Indeterminate="true"
-                                         Class="mr-2" />
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
                     <span>Summarizing...</span>
                 }
                 else
                 {
+
                     <span>Summarize Thread</span>
+                }
+            </MudButton>
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Backpack"
+                       OnClick="SummarizeBackground"
+                       Disabled="isSummarizing || isPolling"
+                       Class="ml-2 mb-2">
+                @if (isPolling)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Waiting for result...</span>
+                }
+                else
+                {
+
+                    <span>Summarize in Background</span>
                 }
             </MudButton>
         </MudCardActions>
     </MudCard>
 
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <MudAlert Severity="@statusSeverity" Class="mb-4">@statusMessage</MudAlert>
+    }
+
     @if (summary != null)
     {
         <!-- Header chips -->
-        <MudStack Row="true" Spacing="2" Class="mb-4">
+        <MudStack Row="true" Spacing="2" Class="mb-4" Wrap="Wrap.Wrap">
             <MudChip T="string" Color="Color.Info" Size="Size.Small">
                 @summary.OriginalEmailCount emails
             </MudChip>
@@ -58,6 +80,13 @@
             <MudChip T="string" Color="Color.Default" Size="Size.Small">
                 Generated @summary.GeneratedDate.ToLocalTime().ToString("hh:mm tt")
             </MudChip>
+            @if (!string.IsNullOrEmpty(summary.Id))
+            {
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small"
+                         Icon="@Icons.Material.Filled.Save">
+                    Saved to DB
+                </MudChip>
+            }
         </MudStack>
 
         <!-- Executive Summary -->
@@ -69,6 +98,16 @@
                         Executive Summary
                     </MudText>
                 </CardHeaderContent>
+                <CardHeaderActions>
+                    @if (!string.IsNullOrEmpty(summary.Id))
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="DeleteSummary"
+                                       Title="Delete this summary" />
+                    }
+                </CardHeaderActions>
             </MudCardHeader>
             <MudCardContent>
                 <MudText Typo="Typo.body1">@summary.ExecutiveSummaryText</MudText>
@@ -79,29 +118,31 @@
         <MudExpansionPanels MultiExpansion="true" Class="mb-4">
 
             <!-- Key Decisions -->
-            <MudExpansionPanel Text="@($"Key Decisions ({summary.KeyDecisions.Count})")">
-                @if (summary.KeyDecisions.Any())
+            <MudExpansionPanel Text="@($"Key Decisions ({summary.KeyDecisions?.Count ?? 0})")">
+                @if (summary.KeyDecisions?.Any() == true)
                 {
                     <MudList T="Decision">
                         @foreach (var d in summary.KeyDecisions)
                         {
                             <MudListItem T="Decision">
                                 <MudStack Spacing="1">
-                                    <MudText Typo="Typo.body1">
-                                        <b>@d.DecisionText</b>
-                                    </MudText>
+                                    <MudText Typo="Typo.body1"><b>@d.DecisionText</b></MudText>
                                     @if (!string.IsNullOrEmpty(d.DecidedBy))
                                     {
-                                        <MudText Typo="Typo.body2"
-                                                 Color="Color.Secondary">
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
                                             Decided by: @d.DecidedBy
                                         </MudText>
                                     }
                                     @if (!string.IsNullOrEmpty(d.Date))
                                     {
-                                        <MudText Typo="Typo.body2"
-                                                 Color="Color.Secondary">
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
                                             Date: @d.Date
+                                        </MudText>
+                                    }
+                                    @if (!string.IsNullOrEmpty(d.Conditions))
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            Conditions: @d.Conditions
                                         </MudText>
                                     }
                                 </MudStack>
@@ -112,13 +153,14 @@
                 }
                 else
                 {
+
                     <MudText Color="Color.Secondary">No decisions identified</MudText>
                 }
             </MudExpansionPanel>
 
             <!-- Open Questions -->
-            <MudExpansionPanel Text="@($"Open Questions ({summary.OpenQuestions.Count})")">
-                @if (summary.OpenQuestions.Any())
+            <MudExpansionPanel Text="@($"Open Questions ({summary.OpenQuestions?.Count ?? 0})")">
+                @if (summary.OpenQuestions?.Any() == true)
                 {
                     <MudList T="OpenQuestion">
                         @foreach (var q in summary.OpenQuestions)
@@ -128,15 +170,13 @@
                                     <MudText Typo="Typo.body1">@q.Question</MudText>
                                     @if (!string.IsNullOrEmpty(q.RaisedBy))
                                     {
-                                        <MudText Typo="Typo.body2"
-                                                 Color="Color.Secondary">
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
                                             Raised by: @q.RaisedBy
                                         </MudText>
                                     }
                                     @if (!string.IsNullOrEmpty(q.Status))
                                     {
-                                        <MudText Typo="Typo.body2"
-                                                 Color="Color.Secondary">
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
                                             Status: @q.Status
                                         </MudText>
                                     }
@@ -148,13 +188,14 @@
                 }
                 else
                 {
+
                     <MudText Color="Color.Secondary">No open questions identified</MudText>
                 }
             </MudExpansionPanel>
 
             <!-- Action Items -->
-            <MudExpansionPanel Text="@($"Action Items ({summary.ActionItems.Count})")">
-                @if (summary.ActionItems.Any())
+            <MudExpansionPanel Text="@($"Action Items ({summary.ActionItems?.Count ?? 0})")">
+                @if (summary.ActionItems?.Any() == true)
                 {
                     <MudTable Items="summary.ActionItems" Dense="true">
                         <HeaderContent>
@@ -165,12 +206,8 @@
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="Task">@context.Task</MudTd>
-                            <MudTd DataLabel="Assigned">
-                                @(context.AssignedTo ?? "—")
-                            </MudTd>
-                            <MudTd DataLabel="Deadline">
-                                @(context.Deadline ?? "—")
-                            </MudTd>
+                            <MudTd DataLabel="Assigned">@(context.AssignedTo ?? "—")</MudTd>
+                            <MudTd DataLabel="Deadline">@(context.Deadline ?? "—")</MudTd>
                             <MudTd DataLabel="Priority">
                                 <MudChip T="string"
                                          Color="@GetPriorityColor(context.Priority)"
@@ -183,13 +220,14 @@
                 }
                 else
                 {
+
                     <MudText Color="Color.Secondary">No action items identified</MudText>
                 }
             </MudExpansionPanel>
 
             <!-- Timeline -->
-            <MudExpansionPanel Text="@($"Timeline ({summary.Timeline.Count} events)")">
-                @if (summary.Timeline.Any())
+            <MudExpansionPanel Text="@($"Timeline ({summary.Timeline?.Count ?? 0} events)")">
+                @if (summary.Timeline?.Any() == true)
                 {
                     <MudTimeline>
                         @foreach (var evt in summary.Timeline)
@@ -197,18 +235,13 @@
                             <MudTimelineItem Color="Color.Primary" Size="Size.Small">
                                 <ItemContent>
                                     <MudStack Spacing="1">
-                                        <MudText Typo="Typo.body1">
-                                            <b>@evt.Event</b>
-                                        </MudText>
-                                        <MudText Typo="Typo.body2"
-                                                 Color="Color.Secondary">
+                                        <MudText Typo="Typo.body1"><b>@evt.Event</b></MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
                                             @evt.Date
                                         </MudText>
                                         @if (!string.IsNullOrEmpty(evt.Significance))
                                         {
-                                            <MudText Typo="Typo.body2">
-                                                @evt.Significance
-                                            </MudText>
+                                            <MudText Typo="Typo.body2">@evt.Significance</MudText>
                                         }
                                     </MudStack>
                                 </ItemContent>
@@ -218,13 +251,14 @@
                 }
                 else
                 {
+
                     <MudText Color="Color.Secondary">No timeline events identified</MudText>
                 }
             </MudExpansionPanel>
 
             <!-- Participants -->
-            <MudExpansionPanel Text="@($"Participants ({summary.Participants.Count})")">
-                @if (summary.Participants.Any())
+            <MudExpansionPanel Text="@($"Participants ({summary.Participants?.Count ?? 0})")">
+                @if (summary.Participants?.Any() == true)
                 {
                     <MudTable Items="summary.Participants" Dense="true">
                         <HeaderContent>
@@ -243,14 +277,13 @@
                                     @context.Position
                                 </MudChip>
                             </MudTd>
-                            <MudTd DataLabel="Contributions">
-                                @context.KeyContributions
-                            </MudTd>
+                            <MudTd DataLabel="Contributions">@context.KeyContributions</MudTd>
                         </RowTemplate>
                     </MudTable>
                 }
                 else
                 {
+
                     <MudText Color="Color.Secondary">No participant analysis available</MudText>
                 }
             </MudExpansionPanel>
@@ -262,47 +295,193 @@
 @code {
     private string subjectInput = "";
     private bool isSummarizing = false;
+    private bool isPolling = false;
     private InsightMailUI.Models.ThreadSummary? summary;
+    private string statusMessage = "";
+    private Severity statusSeverity = Severity.Info;
+
+    // ── Main flow: look up emails by subject → POST to ThreadSummariesController ──
 
     private async Task SummarizeThread()
     {
         if (string.IsNullOrWhiteSpace(subjectInput))
         {
-            Snackbar.Add("Please enter an email subject", Severity.Warning);
+            ShowStatus("Please enter an email subject", Severity.Warning);
             return;
         }
 
         isSummarizing = true;
         summary = null;
+        statusMessage = "";
         StateHasChanged();
 
         try
         {
+            // Step 1: Find emails by subject
+            var emails = await Http.GetFromJsonAsync<List<Email>>(
+                $"api/v1/emails?subject={Uri.EscapeDataString(subjectInput)}");
+
+            if (emails == null || !emails.Any())
+            {
+                ShowStatus($"No emails found with subject: {subjectInput}", Severity.Warning);
+                return;
+            }
+
+            ShowStatus($"Found {emails.Count} emails. Summarizing...", Severity.Info);
+            StateHasChanged();
+
+            // Step 2: POST to ThreadSummariesController — saves to DB
+            var request = new
+            {
+                EmailIds = emails.Select(e => e.Id).ToList(),
+                ThreadId = subjectInput
+            };
+
             var response = await Http.PostAsJsonAsync(
-                $"api/v1/emails/summarize-by-subject?subject={Uri.EscapeDataString(subjectInput)}",
-                new { });
+                "api/v1/threads/summarize", request);
 
             if (response.IsSuccessStatusCode)
             {
-                summary = await response.Content
-                 .ReadFromJsonAsync<InsightMailUI.Models.ThreadSummary>();
+                summary = await response.Content.ReadFromJsonAsync<InsightMailUI.Models.ThreadSummary>();
+                ShowStatus("Thread summarized and saved!", Severity.Success);
                 Snackbar.Add("Thread summarized!", Severity.Success);
             }
             else
             {
                 var error = await response.Content.ReadAsStringAsync();
-                Snackbar.Add($"Error: {error}", Severity.Error);
+                ShowStatus($"Error: {error}", Severity.Error);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            ShowStatus($"Error: {ex.Message}", Severity.Error);
         }
         finally
         {
             isSummarizing = false;
             StateHasChanged();
         }
+    }
+
+    // ── Background flow: fire and forget, then poll for result ──
+
+    private async Task SummarizeBackground()
+    {
+        if (string.IsNullOrWhiteSpace(subjectInput))
+        {
+            ShowStatus("Please enter an email subject", Severity.Warning);
+            return;
+        }
+
+        isSummarizing = true;
+        summary = null;
+        statusMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            // Step 1: Find emails by subject
+            var emails = await Http.GetFromJsonAsync<List<Email>>(
+                $"api/v1/emails?subject={Uri.EscapeDataString(subjectInput)}");
+
+            if (emails == null || !emails.Any())
+            {
+                ShowStatus($"No emails found with subject: {subjectInput}", Severity.Warning);
+                return;
+            }
+
+            // Step 2: Fire background request — returns 202 immediately
+            var request = new
+            {
+                EmailIds = emails.Select(e => e.Id).ToList(),
+                ThreadId = subjectInput
+            };
+
+            var response = await Http.PostAsJsonAsync(
+                "api/v1/threads/summarize/background", request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                ShowStatus("Failed to start background summarization", Severity.Error);
+                return;
+            }
+
+            isSummarizing = false;
+            isPolling = true;
+            ShowStatus("Summarization started in background. Waiting for result...", Severity.Info);
+            StateHasChanged();
+
+            // Step 3: Poll every 5 seconds for up to 2 minutes
+            await PollForSummary(subjectInput);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSummarizing = false;
+            isPolling = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PollForSummary(string threadId)
+    {
+        var maxAttempts = 24; // 24 × 5s = 2 minutes
+        for (int i = 0; i < maxAttempts; i++)
+        {
+            await Task.Delay(5000);
+
+            try
+            {
+                var result = await Http.GetFromJsonAsync<InsightMailUI.Models.ThreadSummary>(
+                    $"api/v1/threads/summaries/thread/{Uri.EscapeDataString(threadId)}");
+
+                if (result != null)
+                {
+                    summary = result;
+                    ShowStatus("Background summarization complete!", Severity.Success);
+                    Snackbar.Add("Summary ready!", Severity.Success);
+                    return;
+                }
+            }
+            catch { /* not ready yet, keep polling */ }
+
+            ShowStatus($"Waiting for result... ({i + 1}/{maxAttempts})", Severity.Info);
+            StateHasChanged();
+        }
+
+        ShowStatus("Timed out waiting for background summary. Check back later.", Severity.Warning);
+    }
+
+    // ── Delete summary from DB ──
+
+    private async Task DeleteSummary()
+    {
+        if (summary?.Id == null) return;
+
+        var response = await Http.DeleteAsync(
+            $"api/v1/threads/summaries/{summary.Id}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            summary = null;
+            ShowStatus("Summary deleted.", Severity.Info);
+            Snackbar.Add("Summary deleted", Severity.Info);
+        }
+        else
+        {
+            Snackbar.Add("Failed to delete summary", Severity.Error);
+        }
+    }
+
+    // ── Helpers ──
+
+    private void ShowStatus(string message, Severity severity)
+    {
+        statusMessage = message;
+        statusSeverity = severity;
     }
 
     private Color GetPriorityColor(string? p) => p?.ToLower() switch
