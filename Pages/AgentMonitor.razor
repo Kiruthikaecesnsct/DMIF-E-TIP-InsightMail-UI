@@ -1,0 +1,142 @@
+﻿@page "/agent-monitor"
+@using Microsoft.AspNetCore.SignalR.Client
+@using MudBlazor
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@implements IAsyncDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudStack Row="true" Justify="Justify.SpaceBetween"
+              AlignItems="AlignItems.Center" Class="mb-4">
+        <MudText Typo="Typo.h4">Agent Activity Monitor</MudText>
+        <MudChip T="string"
+                 Color="@(isConnected ? Color.Success : Color.Error)"
+                 Size="Size.Small">
+            @(isConnected ? "Connected" : "Disconnected")
+        </MudChip>
+    </MudStack>
+
+    <MudPaper Class="pa-4">
+        @if (agentUpdates.Any())
+        {
+            <MudTimeline>
+                @foreach (var update in agentUpdates.AsEnumerable().Reverse().Take(20))
+                {
+                    <MudTimelineItem Color="@GetStatusColor(update.Status)"
+                                     Size="Size.Small">
+                        <ItemContent>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body2">
+                                    <strong>@update.AgentName:</strong> @update.Message
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @update.Timestamp.ToLocalTime().ToString("HH:mm:ss")
+                                    &nbsp;·&nbsp;
+                                    <MudChip T="string"
+                                             Size="Size.Small"
+                                             Color="@GetStatusColor(update.Status)">
+                                        @update.Status
+                                    </MudChip>
+                                </MudText>
+                            </MudStack>
+                        </ItemContent>
+                    </MudTimelineItem>
+                }
+            </MudTimeline>
+        }
+        else
+        {
+            <MudText Color="Color.Secondary">
+                No recent activity. Waiting for agent updates...
+            </MudText>
+        }
+    </MudPaper>
+
+    @if (agentUpdates.Any())
+    {
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Secondary"
+                   OnClick="ClearUpdates"
+                   Class="mt-2">
+            Clear
+        </MudButton>
+    }
+</MudContainer>
+
+@code {
+    private HubConnection? hubConnection;
+    private bool isConnected = false;
+    private List<AgentUpdate> agentUpdates = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+           .WithUrl("https://localhost:7044/emailhub")
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<string>("ReceiveNotification", message =>
+        {
+            Snackbar.Add(message, Severity.Info);
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<AgentUpdate>("ReceiveAgentUpdate", update =>
+        {
+            agentUpdates.Add(update);
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.Reconnecting += _ =>
+        {
+            isConnected = false;
+            InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
+        };
+
+        hubConnection.Reconnected += _ =>
+        {
+            isConnected = true;
+            InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
+        };
+
+        try
+        {
+            await hubConnection.StartAsync();
+            isConnected = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"SignalR connection failed: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private void ClearUpdates()
+    {
+        agentUpdates.Clear();
+        StateHasChanged();
+    }
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "Processing" => Color.Info,
+        "Complete" => Color.Success,
+        "Failed" => Color.Error,
+        _ => Color.Default
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+            await hubConnection.DisposeAsync();
+    }
+
+    private class AgentUpdate
+    {
+        public string AgentName { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string Message { get; set; } = "";
+        public DateTime Timestamp { get; set; }
+    }
+}

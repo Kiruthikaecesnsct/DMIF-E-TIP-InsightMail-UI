@@ -1,0 +1,308 @@
+﻿@page "/compose"
+@using InsightMailUI.Models
+@using MudBlazor
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Compose New Email</MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <!-- Compose from instructions -->
+            <MudCard Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="mr-2" />
+                            AI Draft Assistant
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudTextField @bind-Value="purpose"
+                                  Label="What do you want to say?"
+                                  Placeholder="e.g. Follow up on Q4 budget discussion with Sarah"
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Class="mb-3" />
+                    <MudTextField @bind-Value="recipients"
+                                  Label="To (comma separated)"
+                                  Placeholder="sarah@company.com, john@company.com"
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Class="mb-3" />
+                    <MudTextField @bind-Value="keyPoints"
+                                  Label="Key points to cover (optional)"
+                                  Placeholder="Confirm timeline, Request approval, Attach report"
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Class="mb-3" />
+                    <MudSelect @bind-Value="tone"
+                               Label="Tone"
+                               Variant="Variant.Outlined"
+                               FullWidth="true">
+                        <MudSelectItem Value="@("Professional")">Professional</MudSelectItem>
+                        <MudSelectItem Value="@("Friendly")">Friendly</MudSelectItem>
+                        <MudSelectItem Value="@("Formal")">Formal</MudSelectItem>
+                        <MudSelectItem Value="@("Casual")">Casual</MudSelectItem>
+                    </MudSelect>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.AutoAwesome"
+                               OnClick="GenerateDraft"
+                               Disabled="isGenerating"
+                               Class="ml-2 mb-2">
+                        @if (isGenerating)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Composing...</span>
+                        }
+                        else
+                        {
+
+                            <span>Generate Draft</span>
+                        }
+                    </MudButton>
+                </MudCardActions>
+            </MudCard>
+
+            <!-- Generated draft -->
+            @if (draft != null)
+            {
+                <MudCard Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Generated Draft</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Confidence: @((draft.ConfidenceScore * 100).ToString("F0"))%
+                                · Tone: @draft.Tone
+                            </MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudTextField @bind-Value="draft.Subject"
+                                      Label="Subject"
+                                      Variant="Variant.Outlined"
+                                      FullWidth="true"
+                                      Class="mb-3" />
+                        <MudTextField @bind-Value="draft.Body"
+                                      Label="Body"
+                                      Lines="10"
+                                      Variant="Variant.Outlined"
+                                      FullWidth="true" />
+                        @if (draft.SuggestedAttachments?.Any() == true)
+                        {
+                            <MudAlert Severity="Severity.Info" Class="mt-3">
+                                Suggested attachments: @string.Join(", ", draft.SuggestedAttachments)
+                            </MudAlert>
+                        }
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.ContentCopy"
+                                   OnClick="CopyToClipboard"
+                                   Class="ml-2 mb-2">
+                            Copy to clipboard
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Filled.Refresh"
+                                   OnClick="GenerateDraft"
+                                   Class="ml-2 mb-2">
+                            Regenerate
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            }
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <!-- Template library -->
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Class="mr-2" />
+                            Templates
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @foreach (var tmpl in templates)
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   FullWidth="true"
+                                   Class="mb-2"
+                                   OnClick="@(() => SelectTemplate(tmpl.Key))">
+                            @tmpl.Name
+                        </MudButton>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Template fill dialog -->
+    <MudDialog @bind-IsVisible="showTemplateDialog">
+        <TitleContent>Fill Template: @selectedTemplateName</TitleContent>
+        <DialogContent>
+            @foreach (var field in templateFields)
+            {
+                <MudTextField @bind-Value="templateFieldValues[field]"
+                              Label="@field"
+                              Variant="Variant.Outlined"
+                              FullWidth="true"
+                              Class="mb-2" />
+            }
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@(() => showTemplateDialog = false)">Cancel</MudButton>
+            <MudButton Color="Color.Primary" OnClick="ApplyTemplate">Apply</MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudContainer>
+
+@code {
+    private string purpose = "";
+    private string recipients = "";
+    private string keyPoints = "";
+    private string tone = "Professional";
+    private bool isGenerating = false;
+    private EmailDraft? draft;
+
+    private List<(string Key, string Name)> templates = new();
+    private bool showTemplateDialog = false;
+    private string selectedTemplateKey = "";
+    private string selectedTemplateName = "";
+    private string[] templateFields = Array.Empty<string>();
+    private Dictionary<string, string> templateFieldValues = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<TemplateInfo>>(
+                "api/v1/draft/templates");
+            if (result != null)
+                templates = result.Select(t => (t.Key, t.Name)).ToList();
+        }
+        catch { }
+    }
+
+    private async Task GenerateDraft()
+    {
+        if (string.IsNullOrWhiteSpace(purpose))
+        {
+            Snackbar.Add("Please describe what you want to say", Severity.Warning);
+            return;
+        }
+
+        isGenerating = true;
+        draft = null;
+        StateHasChanged();
+
+        try
+        {
+            var request = new
+            {
+                Purpose = purpose,
+                Recipients = recipients.Split(',')
+                    .Select(r => r.Trim())
+                    .Where(r => !string.IsNullOrEmpty(r))
+                    .ToList(),
+                KeyPoints = keyPoints.Split(',')
+                    .Select(k => k.Trim())
+                    .Where(k => !string.IsNullOrEmpty(k))
+                    .ToList(),
+                Tone = tone
+            };
+
+            var response = await Http.PostAsJsonAsync("api/v1/draft/compose", request);
+            if (response.IsSuccessStatusCode)
+            {
+                draft = await response.Content.ReadFromJsonAsync<EmailDraft>();
+                Snackbar.Add("Draft generated!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to generate draft", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isGenerating = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SelectTemplate(string key)
+    {
+        selectedTemplateKey = key;
+        var tmpl = templates.FirstOrDefault(t => t.Key == key);
+        selectedTemplateName = tmpl.Name ?? key;
+        // Fetch required fields from API — for now use known fields
+        templateFields = key switch
+        {
+            "meeting_request" => new[] { "recipient", "topic", "time_options" },
+            "follow_up" => new[] { "recipient", "topic", "previous_interaction", "main_points" },
+            "status_update" => new[] { "project", "progress", "next_steps", "blockers" },
+            _ => Array.Empty<string>()
+        };
+        templateFieldValues = templateFields.ToDictionary(f => f, f => "");
+        showTemplateDialog = true;
+    }
+
+    private async Task ApplyTemplate()
+    {
+        showTemplateDialog = false;
+        try
+        {
+            var response = await Http.PostAsJsonAsync(
+                $"api/v1/draft/templates/{selectedTemplateKey}",
+                templateFieldValues);
+
+            if (response.IsSuccessStatusCode)
+            {
+                draft = await response.Content.ReadFromJsonAsync<EmailDraft>();
+                Snackbar.Add("Template applied!", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CopyToClipboard()
+    {
+        if (draft == null) return;
+        var text = $"Subject: {draft.Subject}\n\n{draft.Body}";
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        Snackbar.Add("Copied to clipboard!", Severity.Success);
+    }
+
+    private class TemplateInfo
+    {
+        public string Key { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string[] RequiredFields { get; set; } = Array.Empty<string>();
+    }
+
+    private class EmailDraft
+    {
+        public string Subject { get; set; } = "";
+        public string Body { get; set; } = "";
+        public string Tone { get; set; } = "";
+        public decimal ConfidenceScore { get; set; }
+        public List<string>? SuggestedAttachments { get; set; }
+    }
+}
